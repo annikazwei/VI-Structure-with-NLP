@@ -1,0 +1,264 @@
+---
+title: "Comparison of NLP Vector Output and Su et al. (2019) Survey Data"
+editor: visual
+format:
+  html:
+    toc: true
+    toc-location: left
+    number-sections: true 
+---
+
+## Setup
+
+```{r setup, include=FALSE}
+library(boot)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(psych)
+library(corrplot)
+```
+
+### Ipsatization Helper Function
+
+```{r}
+ipsatize <-
+     function(set) {
+         out <- data.frame(t(apply(set, 1, scale2)))
+         colnames(out) <- paste(names(set))
+         #colnames(out) <- paste(names(set), ".ip", sep="")
+         return(out)
+     }
+
+scale2 <-
+function(x, center = TRUE, scale = TRUE) {
+  x <- data.frame(x)
+  miss <- colSums(is.na(x))
+  valid <- nrow(x) - miss
+  x.means <- colMeans(x, na.rm=T)
+  x.sds <- sqrt((apply(x, 2, sd, na.rm=T)^2) * (valid-1) / (valid))
+
+  if(center==T & scale==T) {
+    out <- t((t(x) - x.means) / x.sds)
+  }
+  if(center==T & scale==F) {
+    out <- t(t(x) - x.means)
+  }
+  if(center==F & scale==T) {
+    out <- t(t(x) / x.sds)
+    warning("Standardizing without centering is unconventional.")
+  }
+  if(center==F & scale==F) {
+    out <- x
+    warning("You realize you didn't do anything to your data right?")
+  }
+  return(out)
+}
+```
+
+## Data Preparation
+
+### Su et al. (2019; Su2019)
+
+```{r}
+# Import & Ipsatize Data
+Su2019DM <- read.csv("https://raw.githubusercontent.com/annikazwei/VI-Structure-with-NLP/refs/heads/main/Data_Files/Su2019_DM.csv")
+Su2019DM <- ipsatize(Su2019DM)
+
+Su2019BI <- read.csv("https://raw.githubusercontent.com/annikazwei/VI-Structure-with-NLP/refs/heads/main/Data_Files/Su2019_BI.csv")
+Su2019BI <- ipsatize(Su2019BI)
+```
+
+#### NLP Vector Output
+
+```{r}
+# SETPOINT Dimensions
+nlpDM <- read.csv("https://raw.githubusercontent.com/annika-wei-2002/NLP-VI-Structure/refs/heads/main/NLP_Vectors_DM.csv")
+nlpDM_cols <- nlpDM[1:nrow(nlpDM),1]
+nlpDM <- nlpDM[1:nrow(nlpDM),2:ncol(nlpDM)]
+nlpDM <- t(nlpDM)
+nlpDM <- ipsatize(nlpDM)
+colnames(nlpDM) <- nlpDM_cols 
+
+dim(nlpDM)
+head(nlpDM[,1:5])
+
+# SETPOINT Basic Interests
+nlpBI <- read.csv("https://raw.githubusercontent.com/annika-wei-2002/NLP-VI-Structure/refs/heads/main/NLP_Vectors_BI.csv")
+nlpBI_cols <- nlpBI[1:nrow(nlpBI),1]
+nlpBI <- nlpBI[1:nrow(nlpBI),2:ncol(nlpBI)]
+nlpBI <- t(nlpBI)
+nlpBI <- ipsatize(nlpBI)
+colnames(nlpBI) <- nlpBI_cols
+
+head(nlpBI[,1:5])
+dim(nlpBI)
+```
+
+### Standardizing Column Names
+
+```{r}
+# Dimensions
+## shorthand for easier graph labeling
+## HS: health science; CE: creative expression; T: technology; P: people; 
+## O: organization; N: nature; TH: things
+colnames(nlpDM) <- c("HS", "CE", "T", "P", "O", "I", "N", "TH")
+colnames(Su2019DM) <- colnames(nlpDM)
+#colnames(Su2019DM)
+
+
+# Basic Interests
+colnames(Su2019BI) <- colnames(nlpBI)
+#colnames(Su2019BI)
+```
+
+## Pairwise Correlations & Re-Ordering
+
+### Su2019
+
+```{r}
+# Compute Pairwise Correlation
+Su2019CorDM <- cor(Su2019DM, use="pairwise")
+Su2019CorBI <- cor(Su2019BI, use="pairwise")
+
+# Re-ordering via Hierarchical Clustering
+order.Su2019CorDM <- corrMatOrder(Su2019CorDM, order = 'hclust')
+Su2019CorOrderedDM <- Su2019CorDM[order.Su2019CorDM, order.Su2019CorDM]
+
+order.Su2019CorBI <- corrMatOrder(Su2019CorBI, order = 'hclust')
+Su2019CorOrderedBI <- Su2019CorBI[order.Su2019CorBI, order.Su2019CorBI]
+
+# Check Dimensions
+dim(Su2019CorDM)
+dim(Su2019CorBI)
+```
+
+### NLP Vector Output
+
+```{r}
+# Compute Pairwise Correlation
+NLPCorDM <- cor(nlpDM, use="pairwise")
+NLPCorBI <- cor(nlpBI, use="pairwise")
+
+# Re-ordering via Hierarchical Clustering
+order.NLPCorDM <- corrMatOrder(NLPCorDM, order = 'hclust')
+NLPCorOrderedDM <- NLPCorDM[order.NLPCorDM, order.NLPCorDM]
+
+order.NLPCorBI <- corrMatOrder(NLPCorBI, order = 'hclust')
+NLPCorOrderedBI <- NLPCorBI[order.NLPCorBI, order.NLPCorBI]
+
+# Check Dimensions
+dim(NLPCorDM)
+dim(NLPCorBI)
+```
+
+### Re-Ordering
+
+```{r}
+# Su2019 re-ordered by NLP Structure
+Su2019CorByNLPDM <- Su2019CorDM[order.NLPCorDM, order.NLPCorDM]
+Su2019CorByNLPBI <- Su2019CorBI[order.NLPCorBI, order.NLPCorBI]
+
+# NLP re-ordered by Su2019 Structure
+NLPCorBySu2019DM <- NLPCorDM[order.Su2019CorDM, order.Su2019CorDM]
+NLPCorBySu2019BI <- NLPCorBI[order.Su2019CorBI, order.Su2019CorBI]
+```
+
+## Plotting Correlation Matrices
+
+### Dimension Level
+
+```{r}
+par(mfrow=c(1,2), omi=c(0,0,0,0))
+par(xpd = TRUE)
+
+# Ordered by Su2019 Data Structure
+corrplot(Su2019CorOrderedDM, mar = c(2,0.5,0,0.5), method = "color", tl.pos = 'lt',tl.col = "black", tl.cex = 0.6, cl.pos = 'r', cl.cex = 0.4, addCoef.col = "black", number.cex = 0.5)
+mtext("Su2019 Data", side = 1, line = 2, cex = 0.8)
+corrplot(NLPCorBySu2019DM, mar = c(2,0.5,0,0.5), method = "color", tl.pos = 'lt',tl.col = "black", tl.cex = 0.6, cl.pos = 'r', cl.cex = 0.4, addCoef.col = "black", number.cex = 0.5)
+mtext("NLP Data", side = 1, line = 2, cex = 0.8)
+
+# Ordered by NLP Output Data Structure
+corrplot(Su2019CorByNLPDM, mar = c(2,0.5,0,0.5), method = "color", tl.pos = 'lt',tl.col = "black", tl.cex = 0.6, cl.pos = 'r', cl.cex = 0.4, addCoef.col = "black", number.cex = 0.5)
+mtext("Su2019 Data", side = 1, line = 2, cex = 0.8)
+corrplot(NLPCorOrderedDM, mar = c(2,0.5,0,0.5), method = "color", tl.pos = 'lt',tl.col = "black", tl.cex = 0.6, cl.pos = 'r', cl.cex = 0.4, addCoef.col = "black", number.cex = 0.5)
+mtext("NLP Data", side = 1, line = 2, cex = 0.8)
+```
+
+### Basic Interest Level
+
+```{r}
+par(mfrow=c(1,2), omi=c(0,0,0,0))
+color <- rgb(5/255, 48/255, 96/255)
+
+# Ordered by Su2019 Data Structure
+corrplot(Su2019CorOrderedBI, mar = c(1,0.2,0,0.2), method = "color", tl.pos = 'n', cl.pos = 'r', cl.cex = 0.4, order = "hclust", addrect = 8, rect.col = color, rect.lwd = 1)
+mtext("Su2019 Data", side = 1, line = 2.5, cex = 0.8, adj = 0.45)
+corrplot(NLPCorBySu2019BI, mar = c(1,0.2,0,0.2), method = "color", tl.pos = 'n', cl.pos = 'r', cl.cex = 0.4, order = "hclust", addrect = 8, rect.col = color, rect.lwd = 1)
+mtext("NLP Data", side = 1, line = 2.5, cex = 0.8)
+
+# Ordered by NLP Output Data Structure
+corrplot(Su2019CorByNLPBI, mar = c(1,0.2,0,0.2), method = "color", tl.pos = 'n', cl.pos = 'r', cl.cex = 0.4, order = "hclust", addrect = 8, rect.col = color, rect.lwd = 1)
+mtext("Su2019 Data", side = 1, line = 2.5, cex = 0.8, adj = 0.45)
+corrplot(NLPCorOrderedBI, mar = c(1,0.2,0,0.2), method = "color", tl.pos = 'n', cl.pos = 'r', cl.cex = 0.4, order = "hclust", addrect = 8, rect.col = color, rect.lwd = 1)
+mtext("NLP Data", side = 1, line = 2.5, cex = 0.8)
+```
+
+## Comparison of Correlation Matrices
+
+### Dimension Level
+
+```{r}
+# Extract the Lower Triangular
+Su2019DM_lower <- Su2019CorByNLPDM[lower.tri(Su2019CorByNLPDM)]
+nlpDM_lower <- NLPCorOrderedDM[lower.tri(NLPCorOrderedDM)]
+
+# Calculate the Correlation
+corrCompDM <- cor(Su2019DM_lower, nlpDM_lower)
+corrCompDM
+```
+
+### Basic Interest Level
+
+```{r}
+# Extract the Lower Triangular
+Su2019BI_lower <- Su2019CorByNLPBI[lower.tri(Su2019CorByNLPBI)]
+nlpBI_lower <- NLPCorOrderedBI[lower.tri(NLPCorOrderedBI)]
+
+# Calculate the Correlation
+corrCompBI <- cor(Su2019BI_lower, nlpBI_lower)
+corrCompBI
+```
+
+## PCA with Varimax Rotation
+
+```{r}
+# Parallel Analysis
+out <- fa.parallel(nlpBI, fa = "pc")
+
+# 8 rotations
+pca8_rotated <- principal(nlpBI, nfactors = 8, rotate = "varimax")
+pca8_rotated
+
+# 10 rotations (optimal based on PA)
+pca10_rotated <- principal(nlpBI, nfactors = 10, rotate = "varimax")
+pca10_rotated
+```
+
+### Loading Comparison
+
+```{r}
+Su2019_ESEM <- read.csv("https://raw.githubusercontent.com/annikazwei/VI-Structure-with-NLP/refs/heads/main/Data_Files/Su2019_DM_ESEM.csv")
+nlpBI_pca8 <- read.csv("https://raw.githubusercontent.com/annikazwei/VI-Structure-with-NLP/refs/heads/main/Data_Output/NLP_PCA8.csv")
+
+# Extract Numeric Data
+su2019_loadings <- Su2019_ESEM[, -1]
+su2019_loadings <- as.data.frame(lapply(su2019_loadings, as.numeric))
+nlp_loadings <- nlpBI_pca8[, -1]
+nlp_loadings <- as.data.frame(lapply(nlp_loadings, as.numeric))
+
+
+# Compute the correlation matrix between RC factors and D factors
+correlation_matrix <- cor(nlp_loadings, su2019_loadings)
+correlation_matrix
+```
